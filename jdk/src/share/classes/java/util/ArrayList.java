@@ -440,8 +440,19 @@ public class ArrayList<E> extends AbstractList<E>
      * @return <tt>true</tt> (as specified by {@link Collection#add})
      */
     public boolean add(E e) {
+        /**
+         * 判断是否需要扩容，这里存在线程安全问题。
+         * 如果AB两个线程进来，A size = 6，a B size = 6，b
+         * 未在扩容零界点，可能会有null值
+         * 在扩容临界点，可能会越界
+         *
+         * 在迭代的时候也可能会出现越界异常，即数组的长度 < size
+         */
         ensureCapacityInternal(size + 1);  // Increments modCount!!
         elementData[size++] = e;
+
+        // elementData[size] = e;
+        // size++;
         return true;
     }
 
