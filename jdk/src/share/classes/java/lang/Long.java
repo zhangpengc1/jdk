@@ -393,9 +393,14 @@ public final class Long extends Number implements Comparable<Long> {
     public static String toString(long i) {
         if (i == Long.MIN_VALUE)
             return "-9223372036854775808";
+
+        // 计算 i 有几位
         int size = (i < 0) ? stringSize(-i) + 1 : stringSize(i);
+
         char[] buf = new char[size];
+
         getChars(i, size, buf);
+
         return new String(buf, true);
     }
 
@@ -474,6 +479,7 @@ public final class Long extends Number implements Comparable<Long> {
     }
 
     // Requires positive x
+    // 计算x有几位
     static int stringSize(long x) {
         long p = 10;
         for (int i=1; i<19; i++) {

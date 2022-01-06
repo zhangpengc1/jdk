@@ -123,28 +123,40 @@ public class LinkedList<E>
      * Links e as first element.
      */
     private void linkFirst(E e) {
-        final Node<E> f = first;
-        final Node<E> newNode = new Node<>(null, e, f);
-        first = newNode;
+        // 5 4 3 2 1
+        // A 6  B 7
+        final Node<E> f = first; // 5
+
+        final Node<E> newNode = new Node<>(null, e, f); //A new Node null,6,5
+                                                             //B new Node null,7,5
+        first = newNode;  // first = A
+
         if (f == null)
             last = newNode;
         else
             f.prev = newNode;
+
         size++;
         modCount++;
     }
 
     /**
      * Links e as last element.
+     *
+     * add 方法调用的是这个，未
      */
     void linkLast(E e) {
         final Node<E> l = last;
+
         final Node<E> newNode = new Node<>(l, e, null);
+
         last = newNode;
+
         if (l == null)
             first = newNode;
         else
             l.next = newNode;
+
         size++;
         modCount++;
     }

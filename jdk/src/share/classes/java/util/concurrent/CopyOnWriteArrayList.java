@@ -429,6 +429,8 @@ public class CopyOnWriteArrayList<E>
      *
      * @param e element to be appended to this list
      * @return {@code true} (as specified by {@link Collection#add})
+     *
+     * add时加锁，且新增元素时copy到一个新数组，然后设置
      */
     public boolean add(E e) {
         final ReentrantLock lock = this.lock;
