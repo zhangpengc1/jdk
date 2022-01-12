@@ -1241,10 +1241,14 @@ public class ArrayList<E> extends AbstractList<E>
     @Override
     public void forEach(Consumer<? super E> action) {
         Objects.requireNonNull(action);
+
         final int expectedModCount = modCount;
         @SuppressWarnings("unchecked")
+
         final E[] elementData = (E[]) this.elementData;
+
         final int size = this.size;
+
         for (int i=0; modCount == expectedModCount && i < size; i++) {
             action.accept(elementData[i]);
         }

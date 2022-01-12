@@ -886,7 +886,9 @@ public class CopyOnWriteArrayList<E>
     public void forEach(Consumer<? super E> action) {
         if (action == null) throw new NullPointerException();
         Object[] elements = getArray();
+
         int len = elements.length;
+
         for (int i = 0; i < len; ++i) {
             @SuppressWarnings("unchecked") E e = (E) elements[i];
             action.accept(e);

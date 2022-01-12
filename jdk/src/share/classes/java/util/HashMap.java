@@ -239,7 +239,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * by either of the constructors with arguments.
      * MUST be a power of two <= 1<<30.
      */
-    static final int MAXIMUM_CAPACITY = 1 << 30;
+    static final int MAXIMUM_CAPACITY = 1 << 30; // 2^30
 
     /**
      * The load factor used when none specified in constructor.
@@ -449,10 +449,12 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                                                initialCapacity);
         if (initialCapacity > MAXIMUM_CAPACITY)
             initialCapacity = MAXIMUM_CAPACITY;
+
         if (loadFactor <= 0 || Float.isNaN(loadFactor))
             throw new IllegalArgumentException("Illegal load factor: " +
                                                loadFactor);
         this.loadFactor = loadFactor;
+
         this.threshold = tableSizeFor(initialCapacity);
     }
 
@@ -508,6 +510,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
             }
             else if (s > threshold)
                 resize();
+
             for (Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
                 K key = e.getKey();
                 V value = e.getValue();
@@ -624,25 +627,39 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
                    boolean evict) {
         Node<K,V>[] tab; Node<K,V> p; int n, i;
+        // step1 hash表table为空则调用resize方法初始化hash表
         if ((tab = table) == null || (n = tab.length) == 0)
             n = (tab = resize()).length;
+
+        // step2 判断当前hash桶位置是否有元素，没有的话把当前元素放在计算出来的位置
         if ((p = tab[i = (n - 1) & hash]) == null)
             tab[i] = newNode(hash, key, value, null);
+
+        // step3 若 根据 tab[i = (n - 1) & hash] 计算出来的当前位置已有元素，则往链表中添加元素
         else {
             Node<K,V> e; K k;
+            // step4 如果是重复值，则替换
             if (p.hash == hash &&
                 ((k = p.key) == key || (key != null && key.equals(k))))
                 e = p;
+            // step5 如果当前位置是红黑树，则往树上添加当前元素节点
             else if (p instanceof TreeNode)
                 e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
+
             else {
+                // step6 往链表中添加元素，并判断是否要变化成红黑树
                 for (int binCount = 0; ; ++binCount) {
+                    // 为什么要(e = p.next) == null？因为p为数组上的第一个节点，插入是往链表尾部插入，找到链表是最后一个元素
                     if ((e = p.next) == null) {
                         p.next = newNode(hash, key, value, null);
+                        // 链表长度大于8的时候判断是否转红黑树结构
                         if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                            // 链表长度大于8且数组长度>64转红黑树，否则resize扩容
                             treeifyBin(tab, hash);
                         break;
                     }
+
+                    // key已经存在直接覆盖value
                     if (e.hash == hash &&
                         ((k = e.key) == key || (key != null && key.equals(k))))
                         break;
@@ -657,9 +674,14 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                 return oldValue;
             }
         }
+
+
         ++modCount;
+
+        // step7 超过最大容量就扩容
         if (++size > threshold)
             resize();
+
         afterNodeInsertion(evict);
         return null;
     }
