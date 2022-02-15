@@ -892,12 +892,16 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * @return true if successful
      */
     private boolean addWorker(Runnable firstTask, boolean core) {
+        // 为确保线程安全，进行CAS反复重试
         retry:
         for (;;) {
             int c = ctl.get();
+            // 获取runState , c 的高位存储
+            // c & ~CAPACITY;
             int rs = runStateOf(c);
 
             // Check if queue empty only if necessary.
+            // 已经shutdown, firstTask 为空的添加并不会成功
             if (rs >= SHUTDOWN &&
                 ! (rs == SHUTDOWN &&
                    firstTask == null &&
@@ -906,26 +910,33 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
 
             for (;;) {
                 int wc = workerCountOf(c);
+                // 如果超出最大允许创建的线程数，则直接失败
                 if (wc >= CAPACITY ||
                     wc >= (core ? corePoolSize : maximumPoolSize))
                     return false;
+                // CAS 更新worker+1数，成功则说明占位成功退出retry，
+                // 后续的添加操作将是安全的，失败则说明已有其他线程变更该值
                 if (compareAndIncrementWorkerCount(c))
                     break retry;
                 c = ctl.get();  // Re-read ctl
+                // runState 变更，则退出到 retry 重新循环
                 if (runStateOf(c) != rs)
                     continue retry;
                 // else CAS failed due to workerCount change; retry inner loop
             }
         }
 
+        // 以下为添加 worker 过程
         boolean workerStarted = false;
         boolean workerAdded = false;
         Worker w = null;
         try {
+            // 使用 Worker 封闭 firstTask 任务，后续运行将由 Worker 接管
             w = new Worker(firstTask);
             final Thread t = w.thread;
             if (t != null) {
                 final ReentrantLock mainLock = this.mainLock;
+                // 添加 worker 的过程，需要保证线程安全
                 mainLock.lock();
                 try {
                     // Recheck while holding lock.
@@ -933,8 +944,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                     // shut down before lock acquired.
                     int rs = runStateOf(ctl.get());
 
+                    // SHUTDOWN 情况下还是会创建 Worker, 但是后续检测将会失败
                     if (rs < SHUTDOWN ||
                         (rs == SHUTDOWN && firstTask == null)) {
+                        // 既然是新添加的线程，就不应该是 alive 状态
                         if (t.isAlive()) // precheck that t is startable
                             throw new IllegalThreadStateException();
                         workers.add(w);
@@ -1353,18 +1366,27 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
          * and so reject the task.
          */
         int c = ctl.get();
+        // 当还没有达到核心线程池的数量时，直接添加1个新线程，然后让其执行任务即可
         if (workerCountOf(c) < corePoolSize) {
+            //  添加新线程，且执行command任务
+            //  添加成功，即不需要后续操作了，添加失败，则说明外部环境变化了
             if (addWorker(command, true))
                 return;
             c = ctl.get();
         }
+        // 当核心线程达到后，则尝试添加到阻塞队列中，具体添加方法由阻塞队列实现
         if (isRunning(c) && workQueue.offer(command)) {
             int recheck = ctl.get();
+            // 添加队列成功后，还要再次检测线程池的运行状态，决定启动线程或者状态过期
             if (! isRunning(recheck) && remove(command))
+                // 当线程池已关闭，则将刚刚添加的任务移除，走reject策略
                 reject(command);
+            //  当一个worker都没有时，则添加worker
             else if (workerCountOf(recheck) == 0)
                 addWorker(null, false);
         }
+
+        // 当队列满后，则直接再创建新的线程运行，如果不能再创建线程了，则 reject
         else if (!addWorker(command, false))
             reject(command);
     }
