@@ -1057,6 +1057,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
             int rs = runStateOf(c);
 
             // Check if queue empty only if necessary.
+            // 如果进行了 shutdown, 且队列为空, 则需要将 worker 退出
             if (rs >= SHUTDOWN && (rs >= STOP || workQueue.isEmpty())) {
                 decrementWorkerCount();
                 return null;
@@ -1066,7 +1067,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
 
             // Are workers subject to culling?
             boolean timed = allowCoreThreadTimeOut || wc > corePoolSize;
-
+            // 线程数据大于最大允许线程，需要删除多余的 Worker
             if ((wc > maximumPoolSize || (timed && timedOut))
                 && (wc > 1 || workQueue.isEmpty())) {
                 if (compareAndDecrementWorkerCount(c))
@@ -1075,12 +1076,18 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
             }
 
             try {
+                // 如果开户了超时删除功能，则使用 poll, 否则使用 take() 进行阻塞获取
                 Runnable r = timed ?
                     workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) :
                     workQueue.take();
+                // 获取到任务，则可以进行执行了
                 if (r != null)
                     return r;
+                // 如果有超时设置，则会在下一循环时退出
                 timedOut = true;
+
+                // 忽略中断异常
+                // 在这种情况下，Worker如何响应外部的中断请求呢？？？ 思考
             } catch (InterruptedException retry) {
                 timedOut = false;
             }
@@ -1137,21 +1144,28 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         w.unlock(); // allow interrupts
         boolean completedAbruptly = true;
         try {
+            // 不停地从 workQueue 中获取任务，然后执行，就是这么个逻辑
+            // getTask() 会阻塞式获取，所以 Worker 往往不会立即退出
             while (task != null || (task = getTask()) != null) {
+                // 执行过程中是不允许并发的，即同时只能一个 task 在运行，此时也不允许进行 interrupt
                 w.lock();
                 // If pool is stopping, ensure thread is interrupted;
                 // if not, ensure thread is not interrupted.  This
                 // requires a recheck in second case to deal with
                 // shutdownNow race while clearing interrupt
+                // 检测是否已被线程池是否停止 或者当前 worker 被中断
                 if ((runStateAtLeast(ctl.get(), STOP) ||
                      (Thread.interrupted() &&
                       runStateAtLeast(ctl.get(), STOP))) &&
                     !wt.isInterrupted())
+                    // 中断信息传递
                     wt.interrupt();
                 try {
                     beforeExecute(wt, task);
                     Throwable thrown = null;
                     try {
+                        // 直接调用任务的run方法， 具体的返回结果，会被 FutureTask 封装到 某个变量中
+                        // 可以参考以前的文章 （FutureTask是怎样获取到异步执行结果的？ https://www.cnblogs.com/yougewe/p/11666284.html）
                         task.run();
                     } catch (RuntimeException x) {
                         thrown = x; throw x;
