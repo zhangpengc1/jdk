@@ -373,17 +373,42 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * we can only terminate if, after seeing that it is empty, we see
      * that workerCount is 0 (which sometimes entails a recheck -- see
      * below).
+     *
+     *
+     * ctl这个AtomicInteger类型，是对线程池的运行状态和线程池中有效线程的数量进行控制的一个字段，
+     * 它同时包含两部分的信息：线程池的运行状态 (runState) 和线程池内有效线程的数量 (workerCount)，高3位保存runState，低29位保存workerCount，
+     * COUNT_BITS 就是29，CAPACITY就是1左移29位减1（29个1），这个常量表示workerCount的上限值，大约是5亿。两个变量之间互不干扰。
+     *
+     * 用一个变量去存储两个值，可避免在做相关决策时，出现不一致的情况，不必为了维护两者的一致，而占用锁资源。
+     * 通过阅读线程池源代码也可以发现，经常出现要同时判断线程池运行状态和线程数量的情况。
+     * 线程池也提供了若干方法去供用户获得线程池当前的运行状态、线程个数。这里都使用的是位运算的方式，相比于基本运算，速度也会快很多。
      */
     private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
+
     private static final int COUNT_BITS = Integer.SIZE - 3;
+
+    // 而低 29位，则用来保存 worker 的数量，当worker增加时，只要将整个 ctl 增加即可。
+    // 0001 1111 1111 1111, 即是最大的 worker 数量
     private static final int CAPACITY   = (1 << COUNT_BITS) - 1;
 
     // runState is stored in the high-order bits
+    // 整个状态使值使用 ctl 的高三位值进行控制， COUNT_BITS=29
+    // 1110 0000 0000 0000
     private static final int RUNNING    = -1 << COUNT_BITS;
+
+    // 0000 0000 0000 0000
     private static final int SHUTDOWN   =  0 << COUNT_BITS;
+
+    // 0010 0000 0000 0000
     private static final int STOP       =  1 << COUNT_BITS;
+
+    // 0100 0000 0000 0000
     private static final int TIDYING    =  2 << COUNT_BITS;
+
+    // 0110 0000 0000 0000
     private static final int TERMINATED =  3 << COUNT_BITS;
+
+    // 整个状态值的大小顺序主: RUNNING < SHUTDOWN < STOP < TIDYING < TERMINATED
 
     // Packing and unpacking ctl
     private static int runStateOf(int c)     { return c & ~CAPACITY; }

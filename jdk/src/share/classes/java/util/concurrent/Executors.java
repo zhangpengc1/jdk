@@ -400,6 +400,11 @@ public class Executors {
      * @param <T> the type of the result
      * @return a callable object
      * @throws NullPointerException if task null
+     *
+     * runnable转为callable的方法,其实就是通过RunnableAdapter适配器
+     * RunnableAdapter本身是实现了callable接口，然后在call方法中，实际执行的是runnable的run方法，
+     * 另外将传入的结果参数原封不动的作为结果返回
+     *
      */
     public static <T> Callable<T> callable(Runnable task, T result) {
         if (task == null)
