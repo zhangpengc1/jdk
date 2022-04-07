@@ -179,6 +179,7 @@ class Thread implements Runnable {
 
     /* ThreadLocal values pertaining to this thread. This map is maintained
      * by the ThreadLocal class. */
+    // 可以看到这个成员变量初始值为null，且构造器中也没有进行初始化,在ThreadLocal中初始化
     ThreadLocal.ThreadLocalMap threadLocals = null;
 
     /*

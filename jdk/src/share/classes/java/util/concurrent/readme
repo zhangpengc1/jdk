@@ -1,0 +1,2 @@
+## 1.ScheduledThreadPoolExecutor 线程池原理
+  a.通过newScheduledThreadPool方法可以知道，scheduleWithFixedDelay将线程任务结合参数，封装为 DelayedTask（可以研究下）

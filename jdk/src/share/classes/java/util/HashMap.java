@@ -318,6 +318,8 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     /* ---------------- Static utilities -------------- */
 
     /**
+     * 计算hash
+     *
      * Computes key.hashCode() and spreads (XORs) higher bits of hash
      * to lower.  Because the table uses power-of-two masking, sets of
      * hashes that vary only in bits above the current mask will
@@ -693,73 +695,135 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * elements from each bin must either stay at same index, or move
      * with a power of two offset in the new table.
      *
+     * 扩容详细分析
+     * https://www.cnblogs.com/tuyang1129/p/12368842.html
+     *
      * @return the table
      */
     final Node<K,V>[] resize() {
         Node<K,V>[] oldTab = table;
+        // 当前容量
         int oldCap = (oldTab == null) ? 0 : oldTab.length;
+        // 阈值
         int oldThr = threshold;
+        // 新容量和新阈值
         int newCap, newThr = 0;
+
+        // 若当前容量不为0，表示存储数据的数组已经被初始化过
         if (oldCap > 0) {
+            // 判断当前容量是否超过了允许的最大容量
             if (oldCap >= MAXIMUM_CAPACITY) {
+                // 若超过最大容量，表示无法再进行扩容
+                // 则更新当前的阈值为int的最大值，并返回旧数组
                 threshold = Integer.MAX_VALUE;
                 return oldTab;
             }
+            // 将旧容量*2得到新容量，若新容量未超过最大值，并且旧容量大于默认初始容量（16），
+            // 才则将旧阈值*2得到新阈值
             else if ((newCap = oldCap << 1) < MAXIMUM_CAPACITY &&
                      oldCap >= DEFAULT_INITIAL_CAPACITY)
                 newThr = oldThr << 1; // double threshold
         }
+
+        // 若不满足上面的oldCap > 0，表示数组还未初始化，
+        // 若当前阈值不为0，就将数组的新容量记录为当前的阈值；
+        // 为什么这里的oldThr在未初始化数组的时候就有值呢？这是因为HashMap有两个带参构造器，可以指定初始容量，
+        // 若你调用了这两个可以指定初始容量的构造器，
+        // 这两个构造器就会将阈值记录为第一个大于等于你指定容量，且满足2^n的数（可以看看这两个构造器）
         else if (oldThr > 0) // initial capacity was placed in threshold
             newCap = oldThr;
+        // 若上面的条件都不满足，表示你是调用默认构造器创建的HashMap，且还没有初始化table数组
         else {               // zero initial threshold signifies using defaults
+            // 则将新容量更新为默认初始容量（10）
+            // 阈值即为（容量*负载因子）
             newCap = DEFAULT_INITIAL_CAPACITY;
             newThr = (int)(DEFAULT_LOAD_FACTOR * DEFAULT_INITIAL_CAPACITY);
         }
+
+        // 经过上面的步骤后，newCap一定有值，但是若运行的是上面的第二个分支时，newThr还是0
+        // 所以若当前newThr还是0，则计算出它的值（容量*负载因子）
         if (newThr == 0) {
             float ft = (float)newCap * loadFactor;
             newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ?
                       (int)ft : Integer.MAX_VALUE);
         }
+
+        // 将计算出的新阈值更新到成员变量threshold上
         threshold = newThr;
+        // 创建一个记录新数组用来存HashMap中的元素
+        // 若数组不是第一次初始化，则这里就是创建了一个两倍大小的新数组
         @SuppressWarnings({"rawtypes","unchecked"})
             Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
+        // 将新数组的引用赋值给成员变量table
         table = newTab;
+
+        // 开始将原来的数据加入到新数组中
         if (oldTab != null) {
+            // 遍历原数组
             for (int j = 0; j < oldCap; ++j) {
                 Node<K,V> e;
+                // 若原数组的j位置有节点存在，才进一步操作
                 if ((e = oldTab[j]) != null) {
+                    // 清除旧数组对节点的引用
                     oldTab[j] = null;
+                    // 若table数组的j位置只有一个节点，则直接将这个节点放入新数组
                     if (e.next == null)
+                        // 使用 & 替代 % 计算出余数，即下标
                         newTab[e.hash & (newCap - 1)] = e;
+
+                    // 若第一个节点是一个树节点，表示原数组这个位置的链表已经被转为了红黑树
+                    // 则调用红黑树的方法将节点加入到新数组中
                     else if (e instanceof TreeNode)
                         ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
+
+                     // 上面两种情况都不满足，表示这个位置是一条不止一个节点的链表
+                     // 以下操作相对复杂，所以单独拿出来讲解
                     else { // preserve order
+                        // 链表优化重hash的代码块
                         Node<K,V> loHead = null, loTail = null;
                         Node<K,V> hiHead = null, hiTail = null;
                         Node<K,V> next;
+                        // 循环遍历原链表上的每一个节点
                         do {
+                            // 记录当前节点的下一个节点
                             next = e.next;
+                            // e.hash & oldCap这一步就是判断多出的这一位是否为1
+                            // 若与原容量做与运算，结果为0，表示将这个节点放入到新数组中，下标不变
                             if ((e.hash & oldCap) == 0) {
+                                // 若这是不变链表的第一个节点，用loHead记录
                                 if (loTail == null)
                                     loHead = e;
+                                // 否则，将它加入下标不变链表的尾部
                                 else
                                     loTail.next = e;
+                                // 更新尾部指针指向新加入的节点
                                 loTail = e;
                             }
+                            // 若与原容量做与运算，结果为1，表示将这个节点放入到新数组中，下标将改变
                             else {
+                                // 若这是改变下标链表的第一个节点，用hiHead记录
                                 if (hiTail == null)
                                     hiHead = e;
+                                // 否则，将它加入改变下标链表的尾部
                                 else
                                     hiTail.next = e;
+                                // 更新尾部指针指向新加入的节点
                                 hiTail = e;
                             }
                         } while ((e = next) != null);
+
+                        // 原索引放到bucket里
+                        // 所有节点遍历完后，判断下标不变的链表是否有节点在其中
                         if (loTail != null) {
                             loTail.next = null;
+                            // 将这条链表的最后一个节点的next指向null
                             newTab[j] = loHead;
                         }
+                        // 原索引+oldCap放到bucket里
+                        // 另一条链表与上同理
                         if (hiTail != null) {
                             hiTail.next = null;
+                            // 这条链表放入的位置要在原来的基础上加上oldCap
                             newTab[j + oldCap] = hiHead;
                         }
                     }

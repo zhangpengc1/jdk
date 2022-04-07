@@ -37,12 +37,20 @@ import java.util.function.Supplier;
  * static fields in classes that wish to associate state with a thread (e.g.,
  * a user ID or Transaction ID).
  *
+ * 这个类提供线程局部变量。这些变量与正常的变量不同，每个线程访问一个(通过它的get或set方法)都有它自己的、独立初始化的变量副本。
+ * ThreadLocal实例通常是类中的私有静态字段，希望将状态与线程关联(例如，用户ID或事务ID)
+ *
  * <p>For example, the class below generates unique identifiers local to each
  * thread.
  * A thread's id is assigned the first time it invokes {@code ThreadId.get()}
  * and remains unchanged on subsequent calls.
  * <pre>
  * import java.util.concurrent.atomic.AtomicInteger;
+ *
+ * ThreadId类会在每个线程中生成唯一标识符。线程的id在第一次调用threadid.get()时被分配，在随后的调用中保持不变。
+ *
+ * ThreadId类利用AtomicInteger原子方法getAndIncrement，为每个线程创建一个threadId变量，
+ * 例如第一个线程是1，第二个线程是2...，并提供一个类静态get方法用以获取当前线程ID
  *
  * public class ThreadId {
  *     // Atomic integer containing the next thread ID to be assigned
@@ -81,17 +89,28 @@ public class ThreadLocal<T> {
      * in the common case where consecutively constructed ThreadLocals
      * are used by the same threads, while remaining well-behaved in
      * less common cases.
+     *
+     * ThreadLocals依赖于附加到每个线程的线性探测哈希映射
+     * (thread.ThreadLocals和inheritablethrreadlocals)
+     * ThreadLocal对象充当键，通过threadLocalHashCode进行搜索
+     * 这是一个自定义散列代码(仅在ThreadLocalMaps中有用)
+     *
+     * 它消除了在相同线程使用连续构造的threadlocal的常见情况下的冲突，同时在不太常见的情况下保持良好的性能
      */
     private final int threadLocalHashCode = nextHashCode();
 
     /**
      * The next hash code to be given out. Updated atomically. Starts at
      * zero.
+     *
+     * 下一个hashcode, 原子更新, 从零开始
      */
-    private static AtomicInteger nextHashCode =
-        new AtomicInteger();
+    private static AtomicInteger nextHashCode = new AtomicInteger();
 
     /**
+     * 连续生成的散列码之间的差异
+     * -将隐式顺序线程局部id转换为近似最优分布的乘法散列值 以获得两个大小表的幂
+     *
      * The difference between successively generated hash codes - turns
      * implicit sequential thread-local IDs into near-optimally spread
      * multiplicative hash values for power-of-two-sized tables.
@@ -99,6 +118,8 @@ public class ThreadLocal<T> {
     private static final int HASH_INCREMENT = 0x61c88647;
 
     /**
+     * 返回下一个hashcode
+     *
      * Returns the next hash code.
      */
     private static int nextHashCode() {
@@ -106,6 +127,11 @@ public class ThreadLocal<T> {
     }
 
     /**
+     * 返回此线程局部变量的当前线程“初始值”
+     * 此方法将在线程第一次使用{@link#get}方法访问变量时调用
+     * 除非线程以前调用了{@link#set}方法，在这种情况下，不会为线程调用{@code initialValue}方法
+     * 通常，每个线程最多调用一次此方法，但在随后调用{@link#remove}和{@link#get}时，可能会再次调用此方法
+     *
      * Returns the current thread's "initial value" for this
      * thread-local variable.  This method will be invoked the first
      * time a thread accesses the variable with the {@link #get}
@@ -149,6 +175,10 @@ public class ThreadLocal<T> {
     }
 
     /**
+     * 返回此线程局部变量的当前线程副本中的值
+     * 如果变量没有当前线程的值，则首先将其初始化为调用{@link#initialValue}方法返回的值
+     *
+     *
      * Returns the value in the current thread's copy of this
      * thread-local variable.  If the variable has no value for the
      * current thread, it is first initialized to the value returned
@@ -157,16 +187,22 @@ public class ThreadLocal<T> {
      * @return the current thread's value of this thread-local
      */
     public T get() {
+        // 当前线程
         Thread t = Thread.currentThread();
+
+        // 通过当前Thread获得ThreadLocalMap对象
         ThreadLocalMap map = getMap(t);
+        // 通过当前ThreadLocal对象获得ThreadLocalMap.Entry
         if (map != null) {
             ThreadLocalMap.Entry e = map.getEntry(this);
             if (e != null) {
                 @SuppressWarnings("unchecked")
+                // 拿到了对象，就直接返回
                 T result = (T)e.value;
                 return result;
             }
         }
+        // 如果无法找到对应线程的value值, 则调用setInitialValue()方法将其初始化为null.
         return setInitialValue();
     }
 
@@ -298,6 +334,10 @@ public class ThreadLocal<T> {
     static class ThreadLocalMap {
 
         /**
+         * 用虚引用封装的ThreadLocal
+         *
+         * 在垃圾回收器线程扫描它所管辖的内存区域的过程中，一旦发现了只具有弱引用的对象，不管当前内存空间足够与否，都会回收它的内存
+         *
          * The entries in this hash map extend WeakReference, using
          * its main ref field as the key (which is always a
          * ThreadLocal object).  Note that null keys (i.e. entry.get()
@@ -307,8 +347,9 @@ public class ThreadLocal<T> {
          */
         static class Entry extends WeakReference<ThreadLocal<?>> {
             /** The value associated with this ThreadLocal. */
-            Object value;
+            Object value; // 声明一个值
 
+            // 用ThreadLocal对象和值创建一个Entry
             Entry(ThreadLocal<?> k, Object v) {
                 super(k);
                 value = v;
