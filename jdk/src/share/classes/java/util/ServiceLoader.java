@@ -180,27 +180,40 @@ import java.util.NoSuchElementException;
  *
  * @author Mark Reinhold
  * @since 1.6
+ *
+ *
+ * SPI : Service provider interface 服务提供发现接口
+ *
+ *
+ *
+ *
  */
 
 public final class ServiceLoader<S>
     implements Iterable<S>
 {
 
+    //spi 默认加载的路径
     private static final String PREFIX = "META-INF/services/";
 
     // The class or interface representing the service being loaded
+    // 表示正在被加载的类或接口
     private final Class<S> service;
 
     // The class loader used to locate, load, and instantiate providers
+    // 用于定位、装入和实例化提供程序的类加载器
     private final ClassLoader loader;
 
     // The access control context taken when the ServiceLoader is created
+    // 权限控制上下文
     private final AccessControlContext acc;
 
     // Cached providers, in instantiation order
+    // 基于实例的顺序缓存类的实现实例，其中Key为实现类的全限定类名
     private LinkedHashMap<String,S> providers = new LinkedHashMap<>();
 
     // The current lazy-lookup iterator
+    // 当前的"懒查找"迭代器，ServiceLoader的核心
     private LazyIterator lookupIterator;
 
     /**
@@ -215,13 +228,18 @@ public final class ServiceLoader<S>
      * can be installed into a running Java virtual machine.
      */
     public void reload() {
+        // 清空实例化好的缓存。
         providers.clear();
+        // "懒查找"，ServiceLoader 的核心。
         lookupIterator = new LazyIterator(service, loader);
     }
 
     private ServiceLoader(Class<S> svc, ClassLoader cl) {
+        // svc 为 null,抛 NullPointerException
         service = Objects.requireNonNull(svc, "Service interface cannot be null");
+        // 若没有指定加载器，默认使用系统加载器
         loader = (cl == null) ? ClassLoader.getSystemClassLoader() : cl;
+        // Java安全管理器
         acc = (System.getSecurityManager() != null) ? AccessController.getContext() : null;
         reload();
     }
@@ -319,15 +337,24 @@ public final class ServiceLoader<S>
     }
 
     // Private inner class implementing fully-lazy provider lookup
-    //
+    // LazyIterator 为 ServiceLoader 的核心
+
+    /**
+     * LazyIterator 机制总结：LazyIterator 也实现了 Iterator接口的实现，
+     * Lazy特性体现在只有在使用 ServiceLoader 调用 iterator() 方法获取 Iterator 接口匿名实现类后，
+     * 再调用 hasNext() 方法时，才会"懒判断"或者"懒加载"下一个实现类的实例。调用的入口，也就是示例 main 方法中 while 那一步
+     */
     private class LazyIterator
         implements Iterator<S>
     {
 
         Class<S> service;
         ClassLoader loader;
+        // 加载资源的URL集合
         Enumeration<URL> configs = null;
+        // 需加载的实现类的全限定类名的集合
         Iterator<String> pending = null;
+        // 下一个需要加载的实现类的全限定类名
         String nextName = null;
 
         private LazyIterator(Class<S> service, ClassLoader loader) {
@@ -336,11 +363,15 @@ public final class ServiceLoader<S>
         }
 
         private boolean hasNextService() {
+            // 资源已存在，无需加载
             if (nextName != null) {
                 return true;
             }
+
+            // 资源为null,尝试加载
             if (configs == null) {
                 try {
+                    // 资源名称，META-INF/services + 全限定名
                     String fullName = PREFIX + service.getName();
                     if (loader == null)
                         configs = ClassLoader.getSystemResources(fullName);
@@ -350,12 +381,14 @@ public final class ServiceLoader<S>
                     fail(service, "Error locating configuration files", x);
                 }
             }
+            // 从资源中解析出需要加载的所有实现类的全限定类名
             while ((pending == null) || !pending.hasNext()) {
                 if (!configs.hasMoreElements()) {
                     return false;
                 }
                 pending = parse(service, configs.nextElement());
             }
+            // 下一个需要加载的实现类的全限定类名
             nextName = pending.next();
             return true;
         }
@@ -367,17 +400,23 @@ public final class ServiceLoader<S>
             nextName = null;
             Class<?> c = null;
             try {
+                // 反射构造 Class 实例
                 c = Class.forName(cn, false, loader);
             } catch (ClassNotFoundException x) {
                 fail(service,
                      "Provider " + cn + " not found");
             }
+
+            // 类型判断，校验实现类必须与当前加载的类/接口的关系是派生或相同，否则抛出异常终止
             if (!service.isAssignableFrom(c)) {
                 fail(service,
                      "Provider " + cn  + " not a subtype");
             }
             try {
+                // 实例并强转
                 S p = service.cast(c.newInstance());
+
+                // 实例完成，添加缓存，Key：实现类全限定类名，Value：实现类实例
                 providers.put(cn, p);
                 return p;
             } catch (Throwable x) {
@@ -507,10 +546,13 @@ public final class ServiceLoader<S>
     public static <S> ServiceLoader<S> load(Class<S> service,
                                             ClassLoader loader)
     {
+        // 因为 ServiceLoader 的构造为私有，这里只能依赖此静态方法来访问私有构造实例化，典型的静态工厂方法。
         return new ServiceLoader<>(service, loader);
     }
 
     /**
+     * 加载入口
+     *
      * Creates a new service loader for the given service type, using the
      * current thread's {@linkplain java.lang.Thread#getContextClassLoader
      * context class loader}.
@@ -534,6 +576,7 @@ public final class ServiceLoader<S>
      * @return A new service loader
      */
     public static <S> ServiceLoader<S> load(Class<S> service) {
+        // 获取当前线程的类加载器
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         return ServiceLoader.load(service, cl);
     }

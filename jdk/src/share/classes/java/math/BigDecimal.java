@@ -216,6 +216,10 @@ import static java.math.BigInteger.LONG_MASK;
  * @author  Mike Cowlishaw
  * @author  Joseph D. Darcy
  * @author  Sergey V. Kuksenko
+ *
+ *
+ * 继承Number类提供将表示的数值转换为byte、double、float、int、long和short方法
+ * 实现Comparable接口，获取到compareTo方法
  */
 public class BigDecimal extends Number implements Comparable<BigDecimal> {
     /**
@@ -225,6 +229,7 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
      * @serial
      * @see #unscaledValue
      */
+    // BigDecimal的未scale的值,BigInteger是一个任意长度的整数非标度值
     private final BigInteger intVal;
 
     /**
@@ -233,6 +238,7 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
      * @serial
      * @see #scale
      */
+    // BigDecimal的标度(小数点),输入数除以10的scale次幂(32 位的整数标度).注意:这可能有任何值，因此计算必须长时间进行
     private final int scale;  // Note: this may have any value, so
                               // calculations must be done in longs
 
@@ -245,17 +251,20 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
      *
      * @since  1.5
      */
+    // BigDecimal的精度(精度是非标度值的数字个数)
     private transient int precision;
 
     /**
      * Used to store the canonical string representation, if computed.
      */
+    // toString的缓存
     private transient String stringCache;
 
     /**
      * Sentinel value for {@link #intCompact} indicating the
      * significand information is only available from {@code intVal}.
      */
+    // 标记值为intCompact表示有效数字信息只能从intVal中获得。
     static final long INFLATED = Long.MIN_VALUE;
 
     private static final BigInteger INFLATED_BIGINT = BigInteger.valueOf(INFLATED);
@@ -265,15 +274,18 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
      * less than or equal to {@code Long.MAX_VALUE}, the value can be
      * compactly stored in this field and used in computations.
      */
+    // 若BigDecimal的绝对值小于 Long.MAX_VALUE, 放在这个变量中
     private final transient long intCompact;
 
     // All 18-digit base ten strings fit into a long; not all 19-digit
     // strings will
+    // 所有18位基数的10个字符串组成一个长字符串;不是所有的19位字符串都可以
     private static final int MAX_COMPACT_DIGITS = 18;
 
     /* Appease the serialization gods */
     private static final long serialVersionUID = 6108874887143696463L;
 
+    // 缓存可重用的StringBuilderHelper,为了避免并发访问
     private static final ThreadLocal<StringBuilderHelper>
         threadLocalStringBuilderHelper = new ThreadLocal<StringBuilderHelper>() {
         @Override
@@ -282,6 +294,7 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
         }
     };
 
+    // 缓存0 ~ 10
     // Cache of common small BigDecimal values.
     private static final BigDecimal zeroThroughTen[] = {
         new BigDecimal(BigInteger.ZERO,       0,  0, 1),
@@ -297,6 +310,7 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
         new BigDecimal(BigInteger.TEN,        10, 0, 2),
     };
 
+    // 缓存0 ~ 0E-15
     // Cache of zero scaled by 0 - 15
     private static final BigDecimal[] ZERO_SCALED_BY = {
         zeroThroughTen[0],
@@ -318,7 +332,9 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
     };
 
     // Half of Long.MIN_VALUE & Long.MAX_VALUE.
+    // MIN_VALUE & Long.MAX_VALUE的一半
     private static final long HALF_LONG_MAX_VALUE = Long.MAX_VALUE / 2;
+
     private static final long HALF_LONG_MIN_VALUE = Long.MIN_VALUE / 2;
 
     // Constants
@@ -327,6 +343,8 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
      *
      * @since  1.5
      */
+    // 常量
+    // 值为 0，标度为 0
     public static final BigDecimal ZERO =
         zeroThroughTen[0];
 
@@ -335,6 +353,7 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
      *
      * @since  1.5
      */
+    // 值为 1，标度为 0
     public static final BigDecimal ONE =
         zeroThroughTen[1];
 
@@ -343,8 +362,8 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
      *
      * @since  1.5
      */
-    public static final BigDecimal TEN =
-        zeroThroughTen[10];
+    // 值为 10，标度为 0
+    public static final BigDecimal TEN = zeroThroughTen[10];
 
     // Constructors
 
@@ -352,6 +371,14 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
      * Trusted package private constructor.
      * Trusted simply means if val is INFLATED, intVal could not be null and
      * if intVal is null, val could not be INFLATED.
+     */
+    /**
+     * 受信任的包私有构造函数.可信仅仅意味着如果val是INFLATED,intVal不可能为空,如果intVal为空,val不可能是INFLATED。
+     *
+     * @param intVal	BigInteger的数值
+     * @param val	long的数值
+     * @param scale	标度
+     * @param prec	精度
      */
     BigDecimal(BigInteger intVal, long val, int scale, int prec) {
         this.scale = scale;
@@ -406,15 +433,29 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
      *         is not wholly within {@code in}.
      * @since  1.5
      */
+    /**
+     * 将BigDecimal的字符数组表示形式转换为BigDecimal,接受与BigDecimal(String)构造方法相同的字符序列,同时允许指定子数组.
+     * 注意:如果字符数组中已经提供字符的序列,则使用此构造方法要比将char数组转换为字符串并使用BigDecimal(String)构造方法更快
+     *
+     * @param in	作为源字符的 char 数组
+     * @param offset	要检查的数组中的第一个字符
+     * @param len	要考虑的字符数
+     */
     public BigDecimal(char[] in, int offset, int len, MathContext mc) {
         // protect against huge length.
+        // 防止长度过大
         if (offset + len > in.length || offset < 0)
             throw new NumberFormatException("Bad offset or len arguments for char[] input.");
+
         // This is the primary string to BigDecimal constructor; all
         // incoming strings end up here; it uses explicit (inline)
         // parsing for speed and generates at most one intermediate
         // (temporary) object (a char[] array) for non-compact case.
 
+        // 这是BigDecimal构造函数的主要字符串; 所有传入的字符串都在这里结束
+        // 它使用显式(内联)解析速度并为非紧凑情况生成最多一个中间(临时)对象(char []数组)
+
+        // 对计算过程中的所有字段值使用局部变量
         // Use locals for all fields values until completion
         int prec = 0;                 // record precision value
         int scl = 0;                  // record scale value
@@ -422,25 +463,33 @@ public class BigDecimal extends Number implements Comparable<BigDecimal> {
         BigInteger rb = null;         // the inflated value in BigInteger
         // use array bounds checking to handle too-long, len == 0,
         // bad offset, etc.
+
+        // 使用数组边界检查来处理太长、len == 0、错误偏移等等
         try {
             // handle the sign
+            // 符号的处理：'+'为false，'-'为true
             boolean isneg = false;          // assume positive
+
+            // 第一个字符为'-'
             if (in[offset] == '-') {
                 isneg = true;               // leading minus means negative
                 offset++;
                 len--;
-            } else if (in[offset] == '+') { // leading + allowed
+            } else if (in[offset] == '+') { // leading + allowed 第一个字符为'+'
                 offset++;
                 len--;
             }
 
             // should now be at numeric part of the significand
+            // 数字的有效部分：当有"."时为真
             boolean dot = false;             // true when there is a '.'
             long exp = 0;                    // exponent
             char c;                          // current character
             boolean isCompact = (len <= MAX_COMPACT_DIGITS);
+
             // integer significand array & idx is the index to it. The array
             // is ONLY used when we can't use a compact representation.
+            // idx是整数数组的索引.只有当我们不能使用紧凑的表示时.才会使用数组
             int idx = 0;
             if (isCompact) {
                 // First compact case, we need not to preserve the character
