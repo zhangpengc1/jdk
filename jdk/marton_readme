@@ -5,7 +5,20 @@
 线程池类
     Executors
     FutureTask
+    ThreadPoolExecutor
 
 SPI
     ServiceLoader
+
+
+
+
+
+
+
+2022.04.12
+ThreadPoolExecutor
+1.线程池中的keepalivetime是当线程池中的线程 > 核心线程时允许的最大空闲时间。
+2.之前有个疑问线程池中的核心线程怎么保活，被这个问题误导了，核心线程是一直存活的，问的是怎么设计保活的，这个可以看下ThreadPool源码。（会调用阻塞队列的take方法获取任务，因为没有任务，所以当前线程会被阻塞。）
+
 
