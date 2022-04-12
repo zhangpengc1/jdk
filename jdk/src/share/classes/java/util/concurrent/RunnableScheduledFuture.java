@@ -48,6 +48,9 @@ package java.util.concurrent;
 public interface RunnableScheduledFuture<V> extends RunnableFuture<V>, ScheduledFuture<V> {
 
     /**
+     * 是否为周期定时任务
+     *
+     *
      * Returns {@code true} if this task is periodic. A periodic task may
      * re-run according to some schedule. A non-periodic task can be
      * run only once.

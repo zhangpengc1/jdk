@@ -933,9 +933,12 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      */
     public V get(Object key) {
         Node<K,V>[] tab; Node<K,V> e, p; int n, eh; K ek;
+        // 重新hash
         int h = spread(key.hashCode());
+
         if ((tab = table) != null && (n = tab.length) > 0 &&
             (e = tabAt(tab, (n - 1) & h)) != null) {
+            // 如果第一个就找到，直接返回
             if ((eh = e.hash) == h) {
                 if ((ek = e.key) == key || (ek != null && key.equals(ek)))
                     return e.val;
@@ -1010,29 +1013,33 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     final V putVal(K key, V value, boolean onlyIfAbsent) {
         if (key == null || value == null) throw new NullPointerException();
 
+        // 重新hash
         int hash = spread(key.hashCode());
-
         int binCount = 0;
 
+        // 自旋操作：乐观锁
         for (Node<K,V>[] tab = table;;) {
             Node<K,V> f; int n, i, fh;
-
+            // 如果哈希表为空，就新建
             if (tab == null || (n = tab.length) == 0)
                 tab = initTable();
-
+            // 找到对应下标Entry，如果为空，就新建
             else if ((f = tabAt(tab, i = (n - 1) & hash)) == null) {
                 if (casTabAt(tab, i, null,
                              new Node<K,V>(hash, key, value, null)))
                     break;                   // no lock when adding to empty bin
             }
-
+            // 如果当前节点处于转发节点，即正处于扩容转移状态，就帮忙一起转移
             else if ((fh = f.hash) == MOVED)
                 tab = helpTransfer(tab, f);
 
+            // 在对应Entry下，进行put操作
             else {
                 V oldVal = null;
+                // synchronized锁定entry，进行put
                 synchronized (f) {
                     if (tabAt(tab, i) == f) {
+                        // 链表地put操作
                         if (fh >= 0) {
                             binCount = 1;
                             for (Node<K,V> e = f;; ++binCount) {
@@ -1053,6 +1060,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                                 }
                             }
                         }
+                        // 红黑树地put操作
                         else if (f instanceof TreeBin) {
                             Node<K,V> p;
                             binCount = 2;
@@ -1065,6 +1073,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                         }
                     }
                 }
+                // 检查是否需要将链表转换成红黑树
                 if (binCount != 0) {
                     if (binCount >= TREEIFY_THRESHOLD)
                         treeifyBin(tab, i);
@@ -1074,6 +1083,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                 }
             }
         }
+        // 记录数量，必要地时候进行扩容
         addCount(1L, binCount);
         return null;
     }

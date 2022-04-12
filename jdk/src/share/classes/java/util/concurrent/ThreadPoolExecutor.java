@@ -860,10 +860,12 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * State check needed by ScheduledThreadPoolExecutor to
      * enable running tasks during shutdown.
      *
-     * @param shutdownOK true if should return true if SHUTDOWN
+     * @param shutdownOK true if should return true if SHUTDOWN 表示线程池能在SHUTDOWN状态下运行
      */
     final boolean isRunningOrShutdown(boolean shutdownOK) {
+        // 线程状态
         int rs = runStateOf(ctl.get());
+        // 当线程是RUNNING状态，或者是SHUTDOWN状态且shutdownOK也为true
         return rs == RUNNING || (rs == SHUTDOWN && shutdownOK);
     }
 
@@ -1092,7 +1094,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
 
             // Are workers subject to culling?
             boolean timed = allowCoreThreadTimeOut || wc > corePoolSize;
-            // 线程数据大于最大允许线程，需要删除多余的 Worker
+            // 线程数大于最大允许线程，需要删除多余的 Worker
             if ((wc > maximumPoolSize || (timed && timedOut))
                 && (wc > 1 || workQueue.isEmpty())) {
                 if (compareAndDecrementWorkerCount(c))
@@ -1639,13 +1641,18 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
+     * 预先启动工作线程，确保线程池中有工作线程。
+     *
      * Same as prestartCoreThread except arranges that at least one
      * thread is started even if corePoolSize is 0.
      */
     void ensurePrestart() {
+        // 线程池中的线程数量
         int wc = workerCountOf(ctl.get());
+        // 如果小于核心池数量，就创建新的工作线程
         if (wc < corePoolSize)
             addWorker(null, true);
+        // 说明corePoolSize数量是0，必须创建一个工作线程来执行任务
         else if (wc == 0)
             addWorker(null, false);
     }

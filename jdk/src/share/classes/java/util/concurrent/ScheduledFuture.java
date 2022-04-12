@@ -36,6 +36,8 @@
 package java.util.concurrent;
 
 /**
+ * 实现了Delayed接口，可以返回延时时间以及能够根据延时时间进行比较
+ *
  * A delayed result-bearing action that can be cancelled.
  * Usually a scheduled future is the result of scheduling
  * a task with a {@link ScheduledExecutorService}.
