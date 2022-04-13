@@ -375,7 +375,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * below).
      *
      *
-     * ctl这个AtomicInteger类型，是对线程池的运行状态和线程池中有效线程的数量进行控制的一个字段，
+     * ctl这个AtomicInteger类型，是对线程池的 运行状态 和线程池中 有效线程的数量 进行控制的一个字段，
      * 它同时包含两部分的信息：线程池的运行状态 (runState) 和线程池内有效线程的数量 (workerCount)，高3位保存runState，低29位保存workerCount，
      * COUNT_BITS 就是29，CAPACITY就是1左移29位减1（29个1），这个常量表示workerCount的上限值，大约是5亿。两个变量之间互不干扰。
      *
@@ -385,6 +385,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      */
     private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
 
+    // 29位用来保存有效线程数（worker）
     private static final int COUNT_BITS = Integer.SIZE - 3;
 
     // 而低 29位，则用来保存 worker 的数量，当worker增加时，只要将整个 ctl 增加即可。
@@ -411,8 +412,12 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     // 整个状态值的大小顺序主: RUNNING < SHUTDOWN < STOP < TIDYING < TERMINATED
 
     // Packing and unpacking ctl
+    // 线程池状态
     private static int runStateOf(int c)     { return c & ~CAPACITY; }
+
+    // worker线程数
     private static int workerCountOf(int c)  { return c & CAPACITY; }
+
     private static int ctlOf(int rs, int wc) { return rs | wc; }
 
     /*
@@ -456,6 +461,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
+     * 阻塞队列，当核心线程都在处理任务时，新提交的任务往阻塞队列中存放
+     *
      * The queue used for holding tasks and handing off to worker
      * threads.  We do not require that workQueue.poll() returning
      * null necessarily means that workQueue.isEmpty(), so rely
@@ -538,7 +545,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     private volatile RejectedExecutionHandler handler;
 
     /**
+     * 当workers的数量大于核心线程数时，多出来的线程的空闲时间
+     *
      * Timeout in nanoseconds for idle threads waiting for work.
+     *
      * Threads use this timeout when there are more than corePoolSize
      * present or if allowCoreThreadTimeOut. Otherwise they wait
      * forever for new work.
@@ -546,7 +556,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     private volatile long keepAliveTime;
 
     /**
-     * If false (default), core threads stay alive even when idle.
+     * 是否允许核心线程 keepAliveTime 之后退出
+     *
+     * If false (default), core threads stay alive even when idle(闲置).
      * If true, core threads use keepAliveTime to time out waiting
      * for work.
      */
@@ -596,24 +608,28 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
 
     /**
      * Class Worker mainly maintains interrupt control state for
-     * threads running tasks, along with other minor bookkeeping.
-     * This class opportunistically extends AbstractQueuedSynchronizer
+     * threads running tasks, along with other minor bookkeeping(记账).
+     * This class opportunistically(传统上) extends AbstractQueuedSynchronizer
      * to simplify acquiring and releasing a lock surrounding each
      * task execution.  This protects against interrupts that are
      * intended to wake up a worker thread waiting for a task from
-     * instead interrupting a task being run.  We implement a simple
-     * non-reentrant mutual exclusion lock rather than use
+     * instead interrupting a task being run.
+     *
+     * 前方高能，注意这里的锁是不可重入锁，实现了一个简单的不可重入互斥锁而不是使用ReentrantLock，因为不希望worker任务能够当它们调用池控制方法时，重新获取锁setCorePoolSize。
+     *
+     * We implement a simple non-reentrant mutual(相互) exclusion(排除) lock rather than(而不是) use
      * ReentrantLock because we do not want worker tasks to be able to
-     * reacquire the lock when they invoke pool control methods like
-     * setCorePoolSize.  Additionally, to suppress interrupts until
+     * reacquire(重新获取) the lock when they invoke pool control methods like
+     * setCorePoolSize.
+     *
+     * 此外，抑制中断直到线程开始运行任务，我们初始化lock状态为负值，并在启动时清除它(在runWorker)
+     *
+     * Additionally(另外), to suppress interrupts until
      * the thread actually starts running tasks, we initialize lock
      * state to a negative value, and clear it upon start (in
      * runWorker).
      */
-    private final class Worker
-        extends AbstractQueuedSynchronizer
-        implements Runnable
-    {
+    private final class Worker extends AbstractQueuedSynchronizer implements Runnable {
         /**
          * This class will never be serialized, but we provide a
          * serialVersionUID to suppress a javac warning.
@@ -621,8 +637,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         private static final long serialVersionUID = 6138294804551838833L;
 
         /** Thread this worker is running in.  Null if factory fails. */
+        // 工作线程，thread调用firstTask的run方法执行任务
         final Thread thread;
         /** Initial task to run.  Possibly null. */
+        // 提交过来的任务
         Runnable firstTask;
         /** Per-thread task counter */
         volatile long completedTasks;
@@ -666,8 +684,11 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         }
 
         public void lock()        { acquire(1); }
+
         public boolean tryLock()  { return tryAcquire(1); }
+
         public void unlock()      { release(1); }
+
         public boolean isLocked() { return isHeldExclusively(); }
 
         void interruptIfStarted() {
@@ -686,6 +707,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      */
 
     /**
+     * 向前推进 RunState 状态
+     *
+     * advance 前进
+     *
      * Transitions runState to given target, or leaves it alone if
      * already at least the given target.
      *
@@ -770,6 +795,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
+     * 中断所有线程，即使是活动的。忽略了SecurityExceptions
+     *
      * Interrupts all threads, even if active. Ignores SecurityExceptions
      * (in which case some threads may remain uninterrupted).
      */
@@ -785,6 +812,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
+     * 中断闲置worker
+     *
      * Interrupts threads that might be waiting for tasks (as
      * indicated by not being locked) so they can check for
      * termination or configuration changes. Ignores
@@ -870,6 +899,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
+     * drain（使）排出
+     *
+     * 将任务队列排入一个新的列表，通常使用drainTo。但如果队列是DelayQueue或其他类型poll或drainTo的队列可能无法移除一些元素，它一个一个地删除它们。
+     *
      * Drains the task queue into a new list, normally using
      * drainTo. But if the queue is a DelayQueue or any other kind of
      * queue for which poll or drainTo may fail to remove some
