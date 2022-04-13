@@ -926,6 +926,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      */
 
     /**
+     * 创建一个worker，并添加第一个任务。
+     *
+     * 注意workers 和 workeQueue的区别
+     *
      * Checks if a new worker can be added with respect to current
      * pool state and the given bound (either core or maximum). If so,
      * the worker count is adjusted accordingly, and, if possible, a
@@ -952,6 +956,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * @return true if successful
      */
     private boolean addWorker(Runnable firstTask, boolean core) {
+        // break retry; continue retry;类似于 break 和 continue
         // 为确保线程安全，进行CAS反复重试
         retry:
         for (;;) {
@@ -961,7 +966,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
             int rs = runStateOf(c);
 
             // Check if queue empty only if necessary.
-            // 已经shutdown, firstTask 为空的添加并不会成功
+            // 已经shutdown, firstTask 为空的添加并不会成功。firstTask为空为什么添加不成功？
             if (rs >= SHUTDOWN &&
                 ! (rs == SHUTDOWN &&
                    firstTask == null &&
@@ -969,15 +974,19 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                 return false;
 
             for (;;) {
+                // 获取当前worker数
                 int wc = workerCountOf(c);
+
                 // 如果超出最大允许创建的线程数，则直接失败
                 if (wc >= CAPACITY ||
                     wc >= (core ? corePoolSize : maximumPoolSize))
                     return false;
+
                 // CAS 更新worker+1数，成功则说明占位成功退出retry，
                 // 后续的添加操作将是安全的，失败则说明已有其他线程变更该值
                 if (compareAndIncrementWorkerCount(c))
                     break retry;
+
                 c = ctl.get();  // Re-read ctl
                 // runState 变更，则退出到 retry 重新循环
                 if (runStateOf(c) != rs)
@@ -1007,6 +1016,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                     // SHUTDOWN 情况下还是会创建 Worker, 但是后续检测将会失败
                     if (rs < SHUTDOWN ||
                         (rs == SHUTDOWN && firstTask == null)) {
+
                         // 既然是新添加的线程，就不应该是 alive 状态
                         if (t.isAlive()) // precheck that t is startable
                             throw new IllegalThreadStateException();
@@ -1019,12 +1029,14 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                 } finally {
                     mainLock.unlock();
                 }
+                // 如果添加成功，调用Worker.Thread的start方法，worker开始工作，调用run方法
                 if (workerAdded) {
                     t.start();
                     workerStarted = true;
                 }
             }
         } finally {
+            // 添加失败，从workers中移除
             if (! workerStarted)
                 addWorkerFailed(w);
         }
@@ -1044,7 +1056,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         try {
             if (w != null)
                 workers.remove(w);
+
             decrementWorkerCount();
+
             tryTerminate();
         } finally {
             mainLock.unlock();
