@@ -476,7 +476,18 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     private final BlockingQueue<Runnable> workQueue;
 
     /**
+     *
+     * 虽然我们可以使用某种并发集合，但事实证明
+     * 一般来说，使用锁更可取。其中一个原因是
+     * 这将串行化 interruptIdleWorkers，这避免了
+     * 不必要的中断风暴，特别是在关机期间。
+     *
+     * 否则退出的线程将并发地中断这些线程这还没有中断。它也简化了一些相关的统计簿记的最大poolsize等。我们
+     * 也保持mainLock on shutdown和shutdownNow，为了单独检查时，确保工人设置稳定允许我打断你，并且真的打断你。
+     *
+     * 对workers的修改加锁
      * Lock held on access to workers set and related bookkeeping.
+     *
      * While we could use a concurrent set of some sort, it turns out
      * to be generally preferable to use a lock. Among the reasons is
      * that this serializes interruptIdleWorkers, which avoids
@@ -502,8 +513,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     private final Condition termination = mainLock.newCondition();
 
     /**
-     * Tracks largest attained pool size. Accessed only under
-     * mainLock.
+     * 跟踪最大的达到池大小。仅在mainLock下访问。
+     *
+     * Tracks largest attained pool size. Accessed only under mainLock.
      */
     private int largestPoolSize;
 
@@ -637,7 +649,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         private static final long serialVersionUID = 6138294804551838833L;
 
         /** Thread this worker is running in.  Null if factory fails. */
-        // 工作线程，thread调用firstTask的run方法执行任务
+        // 工作线程，thread调用firstTask的run方法执行任务。
+        // 其实之前有个疑问这里的这个thread是啥， thread就是Worker，this.thread = getThreadFactory().newThread(this);  this就是 Worker
+        // 所以 thread.start后会调用run方法
         final Thread thread;
         /** Initial task to run.  Possibly null. */
         // 提交过来的任务
@@ -727,6 +741,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
+     * try终止
+     *
      * Transitions to TERMINATED state if either (SHUTDOWN and pool
      * and queue empty) or (STOP and pool empty).  If otherwise
      * eligible to terminate but workerCount is nonzero, interrupts an
@@ -961,7 +977,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         retry:
         for (;;) {
             int c = ctl.get();
-            // 获取runState , c 的高位存储
+            // 获取runState , c的高位存储
             // c & ~CAPACITY;
             int rs = runStateOf(c);
 
@@ -1002,7 +1018,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         try {
             // 使用 Worker 封闭 firstTask 任务，后续运行将由 Worker 接管
             w = new Worker(firstTask);
+
             final Thread t = w.thread;
+
             if (t != null) {
                 final ReentrantLock mainLock = this.mainLock;
                 // 添加 worker 的过程，需要保证线程安全
@@ -1216,6 +1234,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         Runnable task = w.firstTask;
         w.firstTask = null;
         w.unlock(); // allow interrupts
+
         boolean completedAbruptly = true;
         try {
             // 不停地从 workQueue 中获取任务，然后执行，就是这么个逻辑

@@ -22,6 +22,7 @@ ThreadPoolExecutor
 2.之前有个疑问线程池中的核心线程怎么保活，被这个问题误导了，核心线程是一直存活的，问的是怎么设计保活的，这个可以看下ThreadPool源码。
 （会调用阻塞队列的take方法获取任务，因为没有任务，所以当前线程会被阻塞，线程状态为blocking）
 3.注意HashSet结构的workers 和BlockingQueue结构的workeQueue的区别。一个存放的是工作线程，一个存放的是任务队列
-
+4.关于线程池worker的设计，其实之前有个疑问这里的这个thread是啥， thread就是Worker，this.thread = getThreadFactory().newThread(this);  this就是 Worker
+所以thread.start后会调用run方法。
 
 
