@@ -144,7 +144,13 @@ import sun.security.action.GetPropertyAction;
  *
  * @author  unascribed
  * @since   JDK1.0
+ *
+ *
+ * File 是磁盘文件和目录路径名的一种抽象形式，其直接继承自 Object，实现了 Serializable 接口和 Comparable 接口；
+ * 实现 Serializable 接口意味着 File 对象可以被序列化，而实现 Comparable 接口意味着 File 对象可以比较大小；
+ * 此外 File 并没有什么特殊之处，就是对文件的一种上层抽象封装实现，方便操作文件。
  */
+
 
 public class File
     implements Serializable, Comparable<File>

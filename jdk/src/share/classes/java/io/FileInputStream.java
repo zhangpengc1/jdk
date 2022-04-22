@@ -49,11 +49,13 @@ public
 class FileInputStream extends InputStream
 {
     /* File Descriptor - handle to the open file */
+    // 文件描述符对象
     private final FileDescriptor fd;
 
     private FileChannel channel = null;
 
     private final Object closeLock = new Object();
+
     private volatile boolean closed = false;
 
     /**
